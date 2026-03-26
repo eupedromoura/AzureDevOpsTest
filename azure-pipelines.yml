@@ -38,7 +38,7 @@ stages:
           vmImage: ubuntu-latest
         steps:
           - task: PowerShell@2
-            displayName: 'POST para ServiceNow DevOps'
+            displayName: 'POST para ServiceNow'
             inputs:
               targetType: inline
               script: |
@@ -48,28 +48,29 @@ stages:
                 }
 
                 $body = @{
-                  toolId        = "4119e03287bbb6144d17a8e80cbb35e5"
-                  pipelineId    = "bf5c4dbe87bb72d05008ec240cbb35b9"
-                  pipelineName  = "AzureDevOpsTest"
-                  buildNumber   = "$(Build.BuildNumber)"
-                  stageName     = "CreateChange"
-                  attemptNumber = "1"
-                  startedBy     = "$(Build.RequestedFor)"
-                  branchName    = "$(Build.SourceBranchName)"
+                  short_description = "Deploy $(Build.DefinitionName) - Build $(Build.BuildNumber)"
+                  description       = "Pipeline: $(Build.DefinitionName) | Branch: $(Build.SourceBranchName) | Solicitado por: $(Build.RequestedFor)"
+                  type              = "normal"
+                  category          = "Software"
+                  state             = "1"
                 } | ConvertTo-Json
 
                 try {
                   $response = Invoke-RestMethod `
-                    -Uri "https://suzanodev.service-now.com/api/sn_devops/v2/devops/tool/orchestration?toolId=4119e03287bbb6144d17a8e80cbb35e5&projectId=dd79a47287bbb6144d17a8e80cbb3546" `
+                    -Uri "https://suzanodev.service-now.com/api/now/table/change_request" `
                     -Method POST `
                     -Headers $headers `
                     -Body $body
 
                   Write-Host "Change criado com sucesso: $($response.result.number)"
+                  Write-Host "sys_id: $($response.result.sys_id)"
+                  echo "##vso[task.setvariable variable=changeNumber;isOutput=true]$($response.result.number)"
+                  echo "##vso[task.setvariable variable=changeSysId;isOutput=true]$($response.result.sys_id)"
                 } catch {
                   Write-Error "Erro ao criar Change: $_"
                   exit 1
                 }
+            name: CreateChangeStep
 
   - stage: WaitApproval
     displayName: 'Aguardar Aprovacao do Change'
@@ -98,14 +99,17 @@ stages:
 
                   try {
                     $response = Invoke-RestMethod `
-                      -Uri "https://suzanodev.service-now.com/api/sn_devops/v2/devops/tool/orchestration?toolId=4119e03287bbb6144d17a8e80cbb35e5&projectId=dd79a47287bbb6144d17a8e80cbb3546" `
+                      -Uri "https://suzanodev.service-now.com/api/now/table/change_request?sysparm_query=stateIN-1^ORstate=0&sysparm_fields=number,state&sysparm_limit=1" `
                       -Method GET `
-                      -Headers @{ "Authorization" = "Basic $(SN_CREDENTIALS)" }
+                      -Headers @{
+                        "Authorization" = "Basic $(SN_CREDENTIALS)"
+                        "Content-Type"  = "application/json"
+                      }
 
-                    $state = $response.result.state
+                    $state = $response.result[0].state
                     Write-Host "Tentativa $attempt/$maxAttempts - Status atual: $state"
 
-                    if ($state -eq "Implement") {
+                    if ($state -eq "-1" -or $state -eq "0") {
                       $approved = $true
                     }
                   } catch {
