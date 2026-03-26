@@ -1,0 +1,121 @@
+trigger:
+  branches:
+    include:
+    - main
+
+variables:
+  - group: ServiceNow
+
+stages:
+
+  - stage: Build
+    displayName: 'Build da Aplicação'
+    jobs:
+      - job: Job
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x'
+            displayName: 'Install Node.js'
+
+          - task: CmdLine@2
+            displayName: 'npm install and build'
+            inputs:
+              script: |
+                npm install
+                npm run build
+
+  - stage: CreateChange
+    displayName: 'Criar Change no ServiceNow'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: OpenChange
+        displayName: 'Abrir Change Request'
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: PowerShell@2
+            displayName: 'POST para ServiceNow DevOps'
+            inputs:
+              targetType: inline
+              script: |
+                $headers = @{
+                  "Content-Type"  = "application/json"
+                  "Authorization" = "Basic $(SN_CREDENTIALS)"
+                }
+
+                $body = @{
+                  toolId        = "4119e03287bbb6144d17a8e80cbb35e5"
+                  projectId     = "dd79a47287bbb6144d17a8e80cbb3546"
+                  pipelineName  = "$(Build.DefinitionName)"
+                  buildNumber   = "$(Build.BuildNumber)"
+                  stageName     = "$(System.StageName)"
+                  attemptNumber = "$(System.StageAttempt)"
+                  startedBy     = "$(Build.RequestedFor)"
+                } | ConvertTo-Json
+
+                try {
+                  $response = Invoke-RestMethod `
+                    -Uri "https://suzanodev.service-now.com/api/sn_devops/v2/devops/tool/orchestration?toolId=4119e03287bbb6144d17a8e80cbb35e5&projectId=dd79a47287bbb6144d17a8e80cbb3546" `
+                    -Method POST `
+                    -Headers $headers `
+                    -Body $body
+
+                  Write-Host "Change criado com sucesso: $($response.result.number)"
+                } catch {
+                  Write-Error "Erro ao criar Change: $_"
+                  exit 1
+                }
+
+  - stage: WaitApproval
+    displayName: 'Aguardar Aprovacao do Change'
+    dependsOn: CreateChange
+    condition: succeeded()
+    jobs:
+      - job: CheckApproval
+        displayName: 'Verificar Aprovacao'
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: PowerShell@2
+            displayName: 'Polling status do Change'
+            inputs:
+              targetType: inline
+              script: |
+                $maxAttempts = 20
+                $attempt = 0
+                $approved = $false
+
+                Write-Host "Aguardando aprovacao do Change no ServiceNow..."
+
+                do {
+                  Start-Sleep -Seconds 30
+                  $attempt++
+
+                  try {
+                    $response = Invoke-RestMethod `
+                      -Uri "https://suzanodev.service-now.com/api/sn_devops/v2/devops/tool/orchestration?toolId=4119e03287bbb6144d17a8e80cbb35e5&projectId=dd79a47287bbb6144d17a8e80cbb3546" `
+                      -Method GET `
+                      -Headers @{ "Authorization" = "Basic $(SN_CREDENTIALS)" }
+
+                    $state = $response.result.state
+                    Write-Host "Tentativa $attempt/$maxAttempts - Status atual: $state"
+
+                    if ($state -eq "Implement") {
+                      $approved = $true
+                    }
+                  } catch {
+                    Write-Warning "Erro ao consultar status (tentativa $attempt): $_"
+                  }
+
+                } while (-not $approved -and $attempt -lt $maxAttempts)
+
+                if (-not $approved) {
+                  Write-Error "Change nao aprovado apos $($maxAttempts * 30 / 60) minutos. Pipeline cancelado."
+                  exit 1
+                }
+
+                Write-Host "Change aprovado. Pipeline finalizado."
