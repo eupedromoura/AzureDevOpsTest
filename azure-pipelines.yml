@@ -53,6 +53,7 @@ stages:
                   type              = "normal"
                   category          = "Software"
                   state             = "1"
+                  assigned_to       = "80a5493687bb72d05008ec240cbb3547"
                 } | ConvertTo-Json
 
                 try {
