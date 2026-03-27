@@ -35,7 +35,7 @@ stages:
       - job: OpenChange
         displayName: 'Abrir Change Request'
         pool:
-          vmImage: windows-latest  # ← Alterado para Windows
+          name: Server        # <-- AGENTLESS (Server job) obrigatório para essa task
         steps:
           - task: ServiceNow-DevOps-Server-Change-Acceleration@1
             displayName: 'Criar e Aguardar Aprovação do Change'
