@@ -46,7 +46,6 @@ stages:
                   "attributes": {
                     "short_description": "Deploy pipeline: $(Build.DefinitionName) - Branch: $(Build.SourceBranchName)",
                     "description": "Build ID: $(Build.BuildId) | Solicitado por: $(Build.RequestedFor)",
-                    "type": "normal"
                   }
                 }
 
