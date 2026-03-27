@@ -44,17 +44,9 @@ stages:
               changeRequestDetails: |
                 {
                   "attributes": {
-                    "requested_by": {
-                      "name": "eupedromoura"
-                    },
-                    "assignment_group": {
-                      "name": "Change Approval Team"
-                    },
                     "short_description": "Deploy pipeline: $(Build.DefinitionName) - Branch: $(Build.SourceBranchName)",
-                    "priority": "2",
-                    "comments": "Build ID: $(Build.BuildId) | Solicitado por: $(Build.RequestedFor)",
-                    "start_date": "2025-03-27 08:00:00",
-                    "end_date": "2025-03-27 18:00:00"
+                    "description": "Build ID: $(Build.BuildId) | Solicitado por: $(Build.RequestedFor)",
+                    "type": "normal"
                   }
                 }
 
