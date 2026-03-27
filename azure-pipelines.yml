@@ -35,93 +35,42 @@ stages:
       - job: OpenChange
         displayName: 'Abrir Change Request'
         pool:
-          vmImage: ubuntu-latest
+          vmImage: windows-latest  # ← Alterado para Windows
         steps:
-          - task: PowerShell@2
-            displayName: 'POST para ServiceNow'
+          - task: ServiceNow-DevOps-Server-Change-Acceleration@1
+            displayName: 'Criar e Aguardar Aprovação do Change'
             inputs:
-              targetType: inline
-              script: |
-                $headers = @{
-                  "Content-Type"  = "application/json"
-                  "Authorization" = "Basic $(SN_CREDENTIALS)"
+              connectedServiceName: "SN-ChangeVelocity-Suzano"
+              changeRequestDetails: |
+                {
+                  "attributes": {
+                    "requested_by": {
+                      "name": "eupedromoura"
+                    },
+                    "assignment_group": {
+                      "name": "Change Approval Team"
+                    },
+                    "short_description": "Deploy pipeline: $(Build.DefinitionName) - Branch: $(Build.SourceBranchName)",
+                    "priority": "2",
+                    "comments": "Build ID: $(Build.BuildId) | Solicitado por: $(Build.RequestedFor)",
+                    "start_date": "2025-03-27 08:00:00",
+                    "end_date": "2025-03-27 18:00:00"
+                  }
                 }
 
-                $body = @{
-                  short_description = "Deploy $(Build.DefinitionName) - Build $(Build.BuildNumber)"
-                  description       = "Pipeline: $(Build.DefinitionName) | Branch: $(Build.SourceBranchName) | Solicitado por: $(Build.RequestedFor)"
-                  type              = "normal"
-                  category          = "Software"
-                  state             = "1"
-                  assigned_to       = "80a5493687bb72d05008ec240cbb3547"
-                } | ConvertTo-Json
-
-                try {
-                  $response = Invoke-RestMethod `
-                    -Uri "https://suzanodev.service-now.com/api/now/table/change_request" `
-                    -Method POST `
-                    -Headers $headers `
-                    -Body $body
-
-                  Write-Host "Change criado com sucesso: $($response.result.number)"
-                  Write-Host "sys_id: $($response.result.sys_id)"
-                  echo "##vso[task.setvariable variable=changeNumber;isOutput=true]$($response.result.number)"
-                  echo "##vso[task.setvariable variable=changeSysId;isOutput=true]$($response.result.sys_id)"
-                } catch {
-                  Write-Error "Erro ao criar Change: $_"
-                  exit 1
-                }
-            name: CreateChangeStep
-
-  - stage: WaitApproval
-    displayName: 'Aguardar Aprovacao do Change'
+  - stage: Deploy
+    displayName: 'Deploy da Aplicação'
     dependsOn: CreateChange
     condition: succeeded()
     jobs:
-      - job: CheckApproval
-        displayName: 'Verificar Aprovacao'
+      - job: DeployJob
+        displayName: 'Executar Deploy'
         pool:
           vmImage: ubuntu-latest
         steps:
-          - task: PowerShell@2
-            displayName: 'Polling status do Change'
+          - task: CmdLine@2
+            displayName: 'Executar Deploy'
             inputs:
-              targetType: inline
               script: |
-                $maxAttempts = 20
-                $attempt = 0
-                $approved = $false
-
-                Write-Host "Aguardando aprovacao do Change no ServiceNow..."
-
-                do {
-                  Start-Sleep -Seconds 30
-                  $attempt++
-
-                  try {
-                    $response = Invoke-RestMethod `
-                      -Uri "https://suzanodev.service-now.com/api/now/table/change_request?sysparm_query=stateIN-1^ORstate=0&sysparm_fields=number,state&sysparm_limit=1" `
-                      -Method GET `
-                      -Headers @{
-                        "Authorization" = "Basic $(SN_CREDENTIALS)"
-                        "Content-Type"  = "application/json"
-                      }
-
-                    $state = $response.result[0].state
-                    Write-Host "Tentativa $attempt/$maxAttempts - Status atual: $state"
-
-                    if ($state -eq "-1" -or $state -eq "0") {
-                      $approved = $true
-                    }
-                  } catch {
-                    Write-Warning "Erro ao consultar status (tentativa $attempt): $_"
-                  }
-
-                } while (-not $approved -and $attempt -lt $maxAttempts)
-
-                if (-not $approved) {
-                  Write-Error "Change nao aprovado apos $($maxAttempts * 30 / 60) minutos. Pipeline cancelado."
-                  exit 1
-                }
-
-                Write-Host "Change aprovado. Pipeline finalizado."
+                echo "Iniciando deploy da branch $(Build.SourceBranchName)"
+                echo "Build ID: $(Build.BuildId)"
