@@ -35,12 +35,12 @@ stages:
       - job: OpenChange
         displayName: 'Abrir Change Request'
         pool:
-          name: Server        # <-- AGENTLESS (Server job) obrigatório para essa task
+          name: Server
         steps:
           - task: ServiceNow-DevOps-Server-Change-Acceleration@1
             displayName: 'Criar e Aguardar Aprovação do Change'
             inputs:
-              connectedServiceName: "SN-ChangeVelocity-Suzano"
+              connectedServiceName: "suzanodev-Teste Final ServiceNow-ServiceNow DevOps Service Connection"
               changeRequestDetails: |
                 {
                   "attributes": {
