@@ -43,6 +43,7 @@ stages:
               connectedServiceName: "suzanodev-Teste Final ServiceNow-ServiceNow DevOps Service Connection"
               changeRequestDetails: |
                 {
+                  "setCloseCode": false,
                   "attributes": {
                     "requested_by": {
                       "name": "Pedro Lucas Sousa Moura"
@@ -50,11 +51,12 @@ stages:
                     "assignment_group": {
                       "name": "Servicenow Support"
                     },
+                    "category": "DevOps",
                     "priority": "2",
                     "comments": "This is a sample pipeline script to be added in your change step",
                     "work_notes": "Update this to work_notes",
-                    "start_date": "2023-09-07 11:59:59",
-                    "end_date": "2023-09-09 11:59:59"
+                    "start_date": "2026-04-10 08:00:00",
+                    "end_date": "2026-04-12 18:00:00"
                   }
                 }
 
